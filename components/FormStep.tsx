@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { statesConfig } from '@/config/states.config'
 import { assetsConfig } from '@/config/assets.config'
-import type { UserInput } from '@/lib/types'
+import type { UserInput, SupportedLanguage } from '@/lib/types'
 import {
   Landmark, Building2, Shield, Briefcase, PiggyBank,
   Banknote, TrendingUp, Home, Car, Users, Calendar,
@@ -20,13 +20,25 @@ const iconMap: Record<string, React.ReactNode> = {
   'id-card': <IdCard size={20} />,
 }
 
+const LANGUAGES: { value: SupportedLanguage; label: string }[] = [
+  { value: 'english',   label: 'English' },
+  { value: 'hindi',     label: 'हिंदी' },
+  { value: 'malayalam', label: 'മലയാളം' },
+  { value: 'tamil',     label: 'தமிழ்' },
+  { value: 'telugu',    label: 'తెలుగు' },
+  { value: 'kannada',   label: 'ಕನ್ನಡ' },
+  { value: 'bengali',   label: 'বাংলা' },
+  { value: 'marathi',   label: 'मराठी' },
+]
+
 interface Props {
   onSubmit: (data: UserInput) => void
   isLoading: boolean
 }
 
 const emptyInput: UserInput = {
-  state: '', assets: [], hasWill: '' as never, relationship: '' as never, concerns: '',
+  state: '', assets: [], hasWill: '' as never, relationship: '' as never,
+  concerns: '', dateOfDeath: '', language: 'english',
 }
 
 export default function FormStep({ onSubmit, isLoading }: Props) {
@@ -54,7 +66,12 @@ export default function FormStep({ onSubmit, isLoading }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!validate()) return
-    onSubmit(form)
+    // Strip empty dateOfDeath so it's undefined not ""
+    const payload: UserInput = {
+      ...form,
+      dateOfDeath: form.dateOfDeath || undefined,
+    }
+    onSubmit(payload)
   }
 
   return (
@@ -166,6 +183,48 @@ export default function FormStep({ onSubmit, isLoading }: Props) {
           ))}
         </div>
         {errors.relationship && <p className="text-xs text-[#E76F51] mt-1">{errors.relationship}</p>}
+      </div>
+
+      {/* Date of death + Language — side by side on wider screens */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg">
+        {/* Date of death */}
+        <div>
+          <label htmlFor="date-of-death" className="block text-sm font-medium text-[#1A1A1A] mb-1">
+            Date of death{' '}
+            <span className="text-[#6B7280] font-normal">(optional)</span>
+          </label>
+          <p className="text-xs text-[#6B7280] mb-2">
+            We'll calculate exact deadline dates for you.
+          </p>
+          <input
+            id="date-of-death"
+            type="date"
+            value={form.dateOfDeath ?? ''}
+            max={new Date().toISOString().split('T')[0]}
+            onChange={(e) => setForm((p) => ({ ...p, dateOfDeath: e.target.value }))}
+            className="w-full border border-[#E8E8E8] rounded-md px-3 py-2.5 text-sm text-[#1A1A1A] bg-white focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
+          />
+        </div>
+
+        {/* Language */}
+        <div>
+          <label htmlFor="language-select" className="block text-sm font-medium text-[#1A1A1A] mb-1">
+            Language
+          </label>
+          <p className="text-xs text-[#6B7280] mb-2">
+            Checklist will be generated in this language.
+          </p>
+          <select
+            id="language-select"
+            value={form.language ?? 'english'}
+            onChange={(e) => setForm((p) => ({ ...p, language: e.target.value as SupportedLanguage }))}
+            className="w-full border border-[#E8E8E8] rounded-md px-3 py-2.5 text-sm text-[#1A1A1A] bg-white focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent appearance-none"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.value} value={l.value}>{l.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Concerns */}

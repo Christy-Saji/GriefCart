@@ -6,15 +6,73 @@ import FormStep from '@/components/FormStep'
 import LoadingScreen from '@/components/LoadingScreen'
 import type { UserInput } from '@/lib/types'
 
+const CACHE_KEY = 'griefcart_cache'
+const CACHE_TTL_MS = 1000 * 60 * 60 * 6 // 6 hours
+
+interface CacheEntry {
+  inputHash: string
+  result: unknown
+  savedAt: number
+}
+
+function hashInput(input: UserInput): string {
+  // Use assets + state + language as the cache key (dateOfDeath and concerns aren't cached)
+  const key = JSON.stringify({
+    assets: [...input.assets].sort(),
+    state: input.state,
+    language: input.language ?? 'english',
+    hasWill: input.hasWill,
+    relationship: input.relationship,
+  })
+  return btoa(key).slice(0, 40)
+}
+
+function readCache(hash: string): unknown | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const entry: CacheEntry = JSON.parse(raw)
+    if (entry.inputHash !== hash) return null
+    if (Date.now() - entry.savedAt > CACHE_TTL_MS) return null
+    return entry.result
+  } catch {
+    return null
+  }
+}
+
+function writeCache(hash: string, result: unknown) {
+  try {
+    const entry: CacheEntry = { inputHash: hash, result, savedAt: Date.now() }
+    localStorage.setItem(CACHE_KEY, JSON.stringify(entry))
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
 export default function FormPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [cacheHit, setCacheHit] = useState(false)
 
   const handleSubmit = async (data: UserInput) => {
     setIsLoading(true)
     setErrorMsg(null)
+    setCacheHit(false)
 
+    const hash = hashInput(data)
+
+    // 1. Check localStorage cache first
+    const cached = readCache(hash)
+    if (cached) {
+      console.log('CACHE HIT — skipping API call')
+      sessionStorage.setItem('griefcart_result', JSON.stringify(cached))
+      setCacheHit(true)
+      router.push('/results')
+      return
+    }
+
+    // 2. Cache miss — call the API
     try {
       const res = await fetch('/api/generate-checklist', {
         method: 'POST',
@@ -39,7 +97,9 @@ export default function FormPage() {
       }
 
       const result = await res.json()
+      // Save to both sessionStorage (for results page) and localStorage (cache)
       sessionStorage.setItem('griefcart_result', JSON.stringify(result))
+      writeCache(hash, result)
       router.push('/results')
     } catch {
       setErrorMsg('Something went wrong. Please check your connection and try again.')

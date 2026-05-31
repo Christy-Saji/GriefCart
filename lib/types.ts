@@ -1,9 +1,13 @@
+export type SupportedLanguage = 'english' | 'hindi' | 'malayalam' | 'tamil' | 'telugu' | 'kannada' | 'bengali' | 'marathi'
+
 export interface UserInput {
   state: string
   assets: string[]
   hasWill: 'yes' | 'no' | 'unsure'
   relationship: 'spouse' | 'child' | 'parent' | 'sibling' | 'other'
   concerns: string
+  dateOfDeath?: string   // ISO date string e.g. "2024-05-15"
+  language?: SupportedLanguage
 }
 
 export interface ChecklistBranch {

@@ -1,25 +1,43 @@
 import { assetsConfig } from '@/config/assets.config'
-import type { UserInput } from '@/lib/types'
+import type { UserInput, SupportedLanguage } from '@/lib/types'
 
 export interface AssetContent {
   assetId: string
   content: string
 }
 
+const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
+  english: 'English',
+  hindi: 'Hindi (हिंदी)',
+  malayalam: 'Malayalam (മലയാളം)',
+  tamil: 'Tamil (தமிழ்)',
+  telugu: 'Telugu (తెలుగు)',
+  kannada: 'Kannada (ಕನ್ನಡ)',
+  bengali: 'Bengali (বাংলা)',
+  marathi: 'Marathi (मराठी)',
+}
+
 /**
  * Builds a single batched prompt for ALL assets at once.
- * Returns a prompt that instructs Gemini to produce a JSON array of cards.
+ * Returns a prompt that instructs Groq to produce a JSON array of cards.
  */
 export const buildBatchPrompt = (
   assets: AssetContent[],
   userInput: UserInput
 ): string => {
-  const { state, relationship, hasWill, concerns } = userInput
+  const { state, relationship, hasWill, concerns, dateOfDeath, language = 'english' } = userInput
+
+  const languageLabel = LANGUAGE_LABELS[language] ?? 'English'
+
+  // Build deadline context if date of death is provided
+  const dateContext = dateOfDeath
+    ? `Date of death: ${new Date(dateOfDeath).toLocaleDateString('en-IN', { dateStyle: 'long' })} — use this to compute actual deadline dates where relevant (e.g. "by 14 August 2024" instead of "within 90 days").`
+    : 'Date of death not provided — use relative deadline language (e.g. "within 90 days of death").'
 
   const assetSections = assets
     .map(({ assetId, content }) => {
       const label = assetsConfig.find((a) => a.id === assetId)?.label ?? assetId
-      return `### ASSET: ${assetId} — ${label}\n${content.slice(0, 3000)}`
+      return `### ASSET: ${assetId} — ${label}\n${content.slice(0, 1500)}`
     })
     .join('\n\n---\n\n')
 
@@ -30,6 +48,8 @@ CONTEXT:
 - Relationship of person filling this: ${relationship}
 - Is there a Will: ${hasWill}
 - Additional concern: ${concerns || 'none'}
+- ${dateContext}
+- Output language: ${languageLabel} — write ALL text values (titles, steps, documents, deadlines, mistakes) in ${languageLabel}. Keep JSON keys in English.
 
 SCRAPED CONTENT PER ASSET:
 ---
@@ -41,7 +61,7 @@ Generate a JSON ARRAY where each element is a card for one asset. The array must
 Each element must follow this exact schema:
 {
   "assetId": "<the assetId string exactly as given>",
-  "title": "Plain English title for this task (max 8 words)",
+  "title": "Plain-language title for this task (max 8 words)",
   "priority": <integer 1-5, 1 = do within 7 days>,
   "withNominee": {
     "steps": ["Step 1", "Step 2", "..."],
@@ -53,7 +73,7 @@ Each element must follow this exact schema:
     "documents": ["Document 1", "Document 2", "..."],
     "timeline": "e.g. 3-6 months"
   },
-  "deadline": "<deadline warning string or null>",
+  "deadline": "<specific deadline string, or null if none>",
   "portal": {
     "name": "<institution name>",
     "url": "<official URL>"
